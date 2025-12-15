@@ -1371,14 +1371,14 @@ const TrendyolView = ({ ops }) => {
     };
 
     const fetchTrendyol = async () => {
-        setLoading(true);
-        try {
-            // Köprü sunucuya istek atıyoruz (server.js çalışıyor olmalı)
-            const res = await fetch('http://localhost:3001/api/trendyol-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(creds)
-            });
+    setLoading(true);
+    try {
+        // DİKKAT: Aşağıdaki https://... kısmına Render'dan aldığın linki yapıştır!
+        const res = await fetch('https://berilden-api.onrender.com/api/trendyol-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+            // body sildik, çünkü şifreler sunucuda!
+        });
             
             const result = await res.json();
             
@@ -1482,13 +1482,14 @@ const HepsiburadaView = ({ ops }) => {
     });
 
     const fetchHepsiburada = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch('http://localhost:3001/api/hepsiburada-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(creds)
-            });
+    setLoading(true);
+    try {
+        // DİKKAT: Aşağıdaki https://... kısmına Render'dan aldığın linki yapıştır!
+        const res = await fetch('https://berilden-api.onrender.com/api/hepsiburada-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+            // body sildik, çünkü şifreler sunucuda!
+        });
             const result = await res.json();
             
             if(result.success) {
@@ -1562,12 +1563,13 @@ const CiceksepetiView = ({ ops }) => {
 
     const fetchCiceksepeti = async () => {
         setLoading(true);
-        try {
-            const res = await fetch('http://localhost:3001/api/ciceksepeti-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey })
-            });
+    try {
+        // DİKKAT: Aşağıdaki https://... kısmına Render'dan aldığın linki yapıştır!
+        const res = await fetch('https://berilden-api.onrender.com/api/ciceksepeti-orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+            // body sildik, çünkü şifreler sunucuda!
+        });
             const result = await res.json();
             if(result.success) {
                 setOrders(result.data);
