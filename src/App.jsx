@@ -1629,6 +1629,83 @@ const CiceksepetiView = ({ ops }) => {
     );
 };
 
+// --- SOFTTR ENTEGRASYON ---
+const SofttrView = ({ ops }) => {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    const fetchSofttr = async () => {
+        setLoading(true);
+        try {
+            // Render sunucumuzdaki adrese istek atıyoruz
+            const res = await fetch('https://berilden-api.onrender.com/api/softtr-orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await res.json();
+            
+            if(result.success) {
+                // Fiyatı 0'dan büyük olanları alalım
+                const validOrders = result.data.filter(o => o.price > 0 || o.price > "0"); 
+                setOrders(validOrders);
+                if(validOrders.length === 0) alert("Sipariş listesi boş geldi. (Sütun isimleri uyuşmuyor olabilir)");
+            } else {
+                alert("Hata: " + (result.error || "Bilinmeyen hata"));
+            }
+        } catch (error) {
+            alert("Sunucu hatası! Lütfen 1 dakika bekleyip tekrar deneyin.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const importOrder = async (order) => {
+        await ops.add('orders', {
+            customerName: order.customerName,
+            productName: order.productName,
+            price: parseFloat(order.price),
+            platform: 'Berildenn.com',
+            status: 'new',
+            note: `Web Siparişi No: ${order.orderNumber}`,
+            createdAt: serverTimestamp()
+        });
+        setOrders(orders.filter(o => o.orderNumber !== order.orderNumber));
+    };
+
+    return (
+        <div className="space-y-6 animate-in fade-in pb-20">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-purple-200 dark:border-slate-700 shadow-sm">
+                <h2 className="text-xl font-bold dark:text-white mb-4 text-purple-600">Berildenn.com Entegrasyonu</h2>
+                <div className="bg-purple-50 text-purple-800 p-3 rounded-lg mb-4 text-xs">
+                    ✅ Excel Bağlantısı Aktif
+                </div>
+                <button onClick={fetchSofttr} disabled={loading} className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-100 dark:shadow-none flex justify-center items-center gap-2">
+                    {loading ? 'Bağlanıyor...' : 'SİTEDEN SİPARİŞLERİ ÇEK'}
+                </button>
+            </div>
+
+            {orders.length > 0 && (
+                <div className="grid grid-cols-1 gap-3">
+                    {orders.map((o, idx) => (
+                        <div key={idx} className="bg-white dark:bg-slate-800 p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 hover:shadow-md transition-shadow">
+                            <div className="flex-1">
+                                <h4 className="font-bold dark:text-white">{o.customerName}</h4>
+                                <p className="text-sm text-slate-500">#{o.orderNumber} • {o.productName}</p>
+                            </div>
+                            <div className="text-right flex items-center gap-4">
+                                <p className="font-bold text-purple-600 text-lg">{o.price}₺</p>
+                                <button onClick={()=>importOrder(o)} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700">
+                                    Sisteme Al
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- BİRLEŞTİRİLMİŞ PAZARYERİ SAYFASI ---
 const MarketplacesView = ({ ops }) => {
     const [activeTab, setActiveTab] = useState('trendyol');
@@ -1653,6 +1730,9 @@ const MarketplacesView = ({ ops }) => {
                     <button onClick={() => setActiveTab('ciceksepeti')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'ciceksepeti' ? 'bg-white dark:bg-slate-700 shadow text-blue-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
                         Çiçeksepeti
                     </button>
+                    <button onClick={() => setActiveTab('softtr')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeTab === 'softtr' ? 'bg-white dark:bg-slate-700 shadow text-purple-600' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>
+                        Berildenn
+                    </button>
                 </div>
             </div>
 
@@ -1661,6 +1741,7 @@ const MarketplacesView = ({ ops }) => {
                 {activeTab === 'trendyol' && <TrendyolView ops={ops} />}
                 {activeTab === 'hepsiburada' && <HepsiburadaView ops={ops} />}
                 {activeTab === 'ciceksepeti' && <CiceksepetiView ops={ops} />}
+                {activeTab === 'softtr' && <SofttrView ops={ops} />}
             </div>
         </div>
     );
