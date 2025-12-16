@@ -65,35 +65,37 @@ app.post('/api/ciceksepeti-orders', async (req, res) => {
     }
 });
 
-// --- SOFTTR (EXCEL) ENTEGRASYONU ---
+// --- SOFTTR (EXCEL) ENTEGRASYONU - DEDEKTİF MODU 🕵️‍♂️ ---
 app.post('/api/softtr-orders', async (req, res) => {
-    // Berildenn.com'daki o uzun Excel linki:
     const excelUrl = "https://www.berildenn.com/panel/views/raporlama/siparisexcel.php?query=VFg0eHFyV2pWYkpTVENBR0RhL0lQMHhSQy82L0w1dkh0bWJrS3RyeGRGV01ZajFaT3RBYlZEaTdLaWxXdUVraUMwR25Rc1BGUGppaHc2MkpRajhVdjQrbXUyWWFxNCtDdzZuTG5qOE1UZDg3dnN5TjNLQngrZlRKVStVeW9UREc1ZWNhbmhqdFh4NGVINHVNN24zRkpnQkUwamxTbXJuOGhIcW1JdnRZaVB5OGlPVEZWWmlyKzkvekxxeW1oaGdOTkpWZjFVQkVGVW9vTFVuL01LT1gveHg5cmRrZnJyQUt2ZU96SUs0bytJTHZQVS8vU3dxdDNZWGpLQVVzS1BDS0xldTIxY2Z4UjBCRGMxb2I4Y0h0aXM5V2xHUVowMVFtQTliR1ZnYkl4SFEyYjBLRDFjNGoveXM2WDR4MVc4KzB0ODBDU1c5b3BEYmtKUkUwRVIrUzgyeFZDZERwaGpVUkk3V2hKVTRxc3RQcUxIdkxJUFVrL05WZWd0R3loMHAyQUZwandGZk0xMDh3ek1hUDhrTEp4OUJBeW1ETEZySE5CcExFZWNMaU1Ob0grUU5IOXFLVWgvVEo5VFlqYllyME5XbTVYclJSdEJMUk1uOGhUTlo4U01jK21LVUhKd2hpbFlHYjZKN0xJcjVzVjNoMGVGSCtURDNiRnFBNjVWY0RHNU4yeDNpcm9VU0poNTRxcWFmMXczakRBV0NXU1ZMU2FiM0QzU2dmaG5DODZvc252ZEo2M20zMGJZYjdHcURMb0pHUmhTbExaUmJjUXF4WDRRaGxDNDBDZUhVZEpCUVdwWmdYNnFkNTBXN0dHaEg0Znc1RDdxSG1HTDVDdjJYemxGdEE4R3hsUTJtWW9pRnVsTkU1VjRTckhMVlFoQnN2MHVIdndyNndZQXJ2VGkrTTJFdDZWTkhtYkt1dkdOY2JTUndtUG51R2FDNFRPYUI1OWJNa0Y5T3VRdlRGNHA0WmMrSzlrZnVqTDRSSXNvNXBMQzNVdjcxWTFaVWF6cnQvL3VxYU5IcmhVZ2EzWkYxbkZJUW9SdjBiUWNpRDl4OHBob21Zd285VklZbW5yano2T1ZCWW91L3B2czNYNmNpUGl4dFJxeFYvWWdneGRjYmlVa09hOUppb3FVUWtwRFNYVkI4WURyK05xUnFRUHdEV0dReU50WXY0NHBMdjRLRkZWYVhySS9rVWxyZ3FDWTlNdmdvcFg3VnltZ2pNbU1tRmJITmNMYzhnZFk0Y3QyaXo5RmNNcUg2eGpCUDRudW5tZXFiWEViZmZkR0d4OXVZdFI2aitNTGdFb2Y2RlpSNVpDek5vMERGT2V5WT0=";
 
     try {
-        console.log("SoftTR Excel indiriliyor...");
+        console.log("1. İstek gönderiliyor...");
         
-        // 1. Excel dosyasını sunucuya indir
         const response = await axios.get(excelUrl, { 
-            responseType: 'arraybuffer',
+            responseType: 'arraybuffer', // Dosya olarak indirmeyi dene
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
+
+        console.log("2. Yanıt alındı. Status:", response.status);
         
-        // 2. Excel'i oku
+        // Gelen verinin ne olduğuna bakalım (HTML mi, Excel mi?)
+        const firstChars = Buffer.from(response.data).toString('utf8').substring(0, 200);
+        console.log("3. İNDİRİLEN DOSYA ÖNİZLEMESİ (ÖNEMLİ):", firstChars);
+
+        // Eğer HTML indirdiyse hata fırlat (Excel okumaya çalışma)
+        if (firstChars.includes("<!DOCTYPE html") || firstChars.includes("<html")) {
+            throw new Error("Sunucu Excel yerine WEB SAYFASI gönderdi! Muhtemelen engellendik.");
+        }
+
         const workbook = XLSX.read(response.data, { type: 'buffer' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        
-        // 3. JSON verisine çevir
         const rawData = XLSX.utils.sheet_to_json(worksheet);
         
-        // 4. Veriyi bizim formata uyarla
         const formattedData = rawData.map(row => ({
-            // Sütun isimlerini tahmin ediyoruz
             orderNumber: row['Sipariş No'] || row['Siparis No'] || row['ID'] || 'Bilinmiyor',
             customerName: row['Ad Soyad'] || row['Müşteri'] || row['Alıcı'] || 'Web Müşterisi',
             productName: row['Ürün'] || row['Urun Adi'] || 'Web Siparişi',
@@ -106,7 +108,8 @@ app.post('/api/softtr-orders', async (req, res) => {
         res.json({ success: true, data: formattedData });
 
     } catch (error) {
-        console.error("SoftTR Hatası:", error.message);
+        console.error("SoftTR Hatası Detayı:", error.message);
+        // Hatayı React tarafına gönderelim ki ekranda görelim
         res.status(500).json({ success: false, error: error.message });
     }
 });
