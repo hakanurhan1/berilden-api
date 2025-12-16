@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, Component } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, increment, setDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
-import { Menu, X } from 'lucide-react'; // Menu (3 çizgi) ve X (Kapat) ikonları
+import { Menu, X } from 'lucide-react'; 
 import * as XLSX from 'xlsx';
 import { 
   Package, ShoppingCart, Lightbulb, ClipboardList, Plus, Trash2, Store, LogOut, Settings, Trello, 
@@ -1471,6 +1471,151 @@ const TrendyolView = ({ ops }) => {
     );
 };
 
+// --- TRENDYOL ÜRÜN YÖNETİMİ & SATIŞA KAPATMA ---
+const ProductManagerView = () => {
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [updating, setUpdating] = useState(null); // Hangi ürün güncelleniyor?
+
+    // Ürünleri Çek
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('https://berilden-api.onrender.com/api/trendyol-products', { method: 'POST' });
+            const result = await res.json();
+            if (result.success) {
+                setProducts(result.data);
+            } else {
+                alert("Ürünler çekilemedi: " + result.error);
+            }
+        } catch (err) {
+            alert("Sunucu hatası.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fiyat/Stok Güncelleme Fonksiyonu
+    const updateProduct = async (product, newPrice, newStock) => {
+        setUpdating(product.barcode);
+        try {
+            const res = await fetch('https://berilden-api.onrender.com/api/trendyol-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    barcode: product.barcode, 
+                    price: newPrice, 
+                    stock: newStock 
+                })
+            });
+            
+            const result = await res.json();
+            if(result.success) {
+                alert("✅ İşlem Başarılı! Trendyol güncellendi.");
+                // Listeyi yerelde güncelle (Tekrar çekmeye gerek kalmasın)
+                setProducts(products.map(p => 
+                    p.barcode === product.barcode 
+                    ? { ...p, salePrice: newPrice, quantity: newStock } 
+                    : p
+                ));
+            } else {
+                alert("❌ Hata: " + result.error);
+            }
+        } catch (err) {
+            alert("Bağlantı hatası.");
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    // Sayfa açılınca yükle
+    useEffect(() => {
+        fetchProducts();
+    }, []);
+
+    if (loading) return <div className="text-center p-10 text-purple-600 font-bold">Ürünler Trendyol'dan Yükleniyor...</div>;
+
+    return (
+        <div className="space-y-4 animate-in fade-in pb-24">
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold dark:text-white text-purple-600">Trendyol Ürün Yönetimi</h2>
+                <button onClick={fetchProducts} className="text-sm bg-slate-100 px-3 py-1 rounded hover:bg-slate-200">Yenile</button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {products.map((p) => (
+                    <div key={p.barcode} className={`bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-xl p-4 shadow-sm flex flex-col gap-3 ${p.quantity === 0 ? 'opacity-60 grayscale' : ''}`}>
+                        {/* Ürün Bilgisi */}
+                        <div className="flex gap-4">
+                            <img src={p.images[0]?.url} alt="ürün" className="w-16 h-16 object-cover rounded-lg bg-slate-100" />
+                            <div className="flex-1">
+                                <h4 className="font-bold text-sm dark:text-white line-clamp-2">{p.title}</h4>
+                                <p className="text-xs text-slate-500 mt-1">Barkod: {p.barcode}</p>
+                                {p.quantity === 0 && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded font-bold">SATIŞA KAPALI</span>}
+                            </div>
+                        </div>
+
+                        {/* Düzenleme Alanı */}
+                        <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-slate-500 block mb-1">Fiyat (₺)</label>
+                                <input 
+                                    type="number" 
+                                    defaultValue={p.salePrice} 
+                                    id={`price-${p.barcode}`}
+                                    className="w-full p-2 rounded border text-sm font-bold dark:bg-slate-800 dark:text-white dark:border-slate-600"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 block mb-1">Stok</label>
+                                <input 
+                                    type="number" 
+                                    defaultValue={p.quantity} 
+                                    id={`stock-${p.barcode}`}
+                                    className="w-full p-2 rounded border text-sm font-bold dark:bg-slate-800 dark:text-white dark:border-slate-600"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Aksiyon Butonları */}
+                        <div className="flex gap-2">
+                            {/* Güncelle Butonu */}
+                            <button 
+                                disabled={updating === p.barcode}
+                                onClick={() => {
+                                    const priceVal = document.getElementById(`price-${p.barcode}`).value;
+                                    const stockVal = document.getElementById(`stock-${p.barcode}`).value;
+                                    updateProduct(p, priceVal, stockVal);
+                                }}
+                                className={`flex-1 py-2 rounded-lg font-bold text-white text-sm transition-colors ${updating === p.barcode ? 'bg-slate-400' : 'bg-purple-600 hover:bg-purple-700'}`}
+                            >
+                                {updating === p.barcode ? '...' : 'GÜNCELLE'}
+                            </button>
+
+                            {/* Satışı Durdur Butonu (Sadece stok varsa görünür) */}
+                            {p.quantity > 0 && (
+                                <button 
+                                    disabled={updating === p.barcode}
+                                    onClick={() => {
+                                        if(confirm("Bu ürünü satışa kapatmak (Stok: 0) istiyor musunuz?")) {
+                                            const priceVal = document.getElementById(`price-${p.barcode}`).value;
+                                            updateProduct(p, priceVal, 0); // Stoğu 0 gönderiyoruz
+                                        }
+                                    }}
+                                    className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"
+                                    title="Satışı Durdur (Stok Sıfırla)"
+                                >
+                                    🛑
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 // --- HEPSİBURADA ENTEGRASYON BİLEŞENİ (EKSİK OLAN PARÇA) ---
 const HepsiburadaView = ({ ops }) => {
     const [orders, setOrders] = useState([]);
@@ -1850,6 +1995,7 @@ function MainApp() {
       { id: 'orders', label: 'Siparişler', icon: Trello, view: <OrdersView orders={data.orders} ops={ops}/> },
       { id: 'planning', label: 'Planlama', icon: BookOpen, view: <PlanningView todos={data.todos} proposals={data.proposals} ideas={data.ideas} ops={ops}/> },
       { id: 'marketplaces', label: 'Pazaryeri', icon: Globe, view: <MarketplacesView ops={ops}/> },
+      { id: 'products', label: 'Ürün & Fiyat', icon: ShoppingBag, view: <ProductManagerView /> },
       { id: 'workshop', label: '3D Atölye', icon: Box, view: <WorkshopView printers={data.printers} jobs={data.printJobs} filaments={data.filaments} archive={data.printArchive} ops={ops}/> },
       { id: 'market', label: 'Pazar', icon: Store, view: <MarketView markets={data.markets} items={data.items} sales={data.recentSales} expenses={data.expenses} ops={ops}/> },
       { id: 'accounting', label: 'Muhasebe', icon: Coins, view: <AccountingView expenses={data.expenses} sales={data.recentSales} ops={ops}/> },

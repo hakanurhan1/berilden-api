@@ -126,7 +126,9 @@ app.post('/api/trendyol-products', async (req, res) => {
     try {
         // İlk 500 ürünü çekelim (Sayfalama yapmadan toplu görelim)
         const response = await axios.get(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/products?size=100`, {
-            headers: { 'Authorization': `Basic ${encodedAuth}` }
+            headers: { 'Authorization': `Basic ${encodedAuth}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
         });
 
         res.json({ success: true, data: response.data.content });
@@ -161,6 +163,7 @@ app.post('/api/trendyol-update', async (req, res) => {
         await axios.post(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/products/price-and-inventory`, payload, {
             headers: { 
                 'Authorization': `Basic ${encodedAuth}`,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Content-Type': 'application/json'
             }
         });
