@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, Component } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, increment, setDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { Menu, X } from 'lucide-react'; // Menu (3 çizgi) ve X (Kapat) ikonları
 import { 
   Package, ShoppingCart, Lightbulb, ClipboardList, Plus, Trash2, Store, LogOut, Settings, Trello, 
   Coins, Printer, Box, Activity, LayoutDashboard, TrendingUp, AlertTriangle, 
-  Check, X, ArrowRight, ArrowLeftCircle, Wrench, ArrowUpRight, ArrowDownRight,
+  Check, ArrowRight, ArrowLeftCircle, Wrench, ArrowUpRight, ArrowDownRight,
   Moon, Sun, FileSpreadsheet, User, Search, ListTodo, Calendar, CreditCard, Wallet, Edit, ShoppingBag, Minus, PenTool, CheckCircle, CheckSquare, Layers, Pin, Sparkles, Archive, Globe, Link, PieChart, Banknote, ShoppingBasket, ListChecks, LogIn, ShieldAlert, Key, Clock, MapPin, BookOpen, Info, Filter, Calculator, Palette, ExternalLink, TrendingDown, Tag, UserPlus, Lock, RefreshCw, LayoutGrid
 } from 'lucide-react';
 
@@ -1666,7 +1667,9 @@ const MarketplacesView = ({ ops }) => {
 };
 
 // --- ANA UYGULAMA ---
+// --- ANA UYGULAMA (MainApp) ---
 function MainApp() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Menü durumu
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
@@ -1686,41 +1689,22 @@ function MainApp() {
 
   const handleResetData = async () => {
     if (!confirm("⚠️ DİKKAT: Tüm veritabanı silinecek! \n\nStok, siparişler, müşteriler, ayarlar... Her şey kalıcı olarak yok olacak.\n\nOnaylıyor musunuz?")) return;
-    
     const verification = prompt("İşlemi onaylamak için 'SIFIRLA' yazınız:");
-    if (verification !== 'SIFIRLA') {
-        alert("İşlem iptal edildi.");
-        return;
-    }
-
+    if (verification !== 'SIFIRLA') { alert("İşlem iptal edildi."); return; }
     setLoading(true);
     try {
-        const collections = [
-            'inventory', 'orders', 'sales_history', 'markets', 'general_expenses',
-            'shopping', 'printers', 'workshop_jobs', 'workshop_filaments', 
-            'print_archive', 'todos', 'proposals', 'ideas'
-        ];
-
+        const collections = ['inventory', 'orders', 'sales_history', 'markets', 'general_expenses', 'shopping', 'printers', 'workshop_jobs', 'workshop_filaments', 'print_archive', 'todos', 'proposals', 'ideas'];
         for (const col of collections) {
             const ref = collection(db, 'artifacts', appId, 'public', 'data', col);
             const snapshot = await getDocs(ref);
             const batchPromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
             await Promise.all(batchPromises);
         }
-        
         notify(setNotification, "Sistem fabrika ayarlarına döndürüldü.");
-    } catch (e) {
-        console.error(e);
-        notify(setNotification, "Sıfırlama hatası: " + e.message, "error");
-    } finally {
-        setLoading(false);
-    }
+    } catch (e) { console.error(e); notify(setNotification, "Sıfırlama hatası: " + e.message, "error"); } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+  useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); localStorage.setItem('theme', theme); }, [theme]);
 
   useEffect(() => {
     if(!isFirebaseInitialized) { setLoading(false); return; }
@@ -1751,7 +1735,7 @@ function MainApp() {
   }, [user]);
 
   if (loading) return <div className="h-screen flex items-center justify-center text-orange-600 font-bold animate-pulse">Yükleniyor...</div>;
-  if (!user) return <LoginPage onLogin={async (u,p) => { if(!isFirebaseInitialized) return alert("Firebase bağlı değil."); const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'users'), where('username', '==', u), where('password', '==', p)); const s = await getDocs(q); if(!s.empty) { if(!auth.currentUser) await signInAnonymously(auth); setUser({uid:'user'}); } else alert("Hatalı Giriş"); }} loading={loading} error="" setError={alert} />;
+  if (!user) return <LoginPage onLogin={async (u,p) => { if(!isFirebaseInitialized) return alert("Firebase bağlı değil."); const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'users'), where('username', '==', u), where('password', '==', p)); const s = await getDocs(q); if(!s.empty) { if(!auth.currentUser) await signInAnonymously(auth); setUser({uid:'user', username: u}); } else alert("Hatalı Giriş"); }} loading={loading} error="" setError={alert} />;
 
   const tabs = [
       { id: 'home', label: 'Dashboard', icon: LayoutDashboard, view: <DashboardView data={data} setActiveTab={setActiveTab}/> },
@@ -1764,38 +1748,87 @@ function MainApp() {
       { id: 'market', label: 'Pazar', icon: Store, view: <MarketView markets={data.markets} items={data.items} sales={data.recentSales} expenses={data.expenses} ops={ops}/> },
       { id: 'accounting', label: 'Muhasebe', icon: Coins, view: <AccountingView expenses={data.expenses} sales={data.recentSales} ops={ops}/> },
       { id: 'shopping', label: 'Alınacaklar', icon: ClipboardList, view: <ShoppingView items={data.shoppingList} ops={ops}/> },
-      { 
-        id: 'settings', 
-        label: 'Ayarlar', 
-        icon: Settings, 
-        view: <SettingsView 
-                user={user} 
-                onReset={handleResetData} 
-                fullData={data}      // <-- EKLENDİ: Yedekleme için tüm veriyi gönderiyoruz
-                theme={theme}        // <-- EKLENDİ: Tema durumu
-                setTheme={setTheme}  // <-- EKLENDİ: Tema değiştirme fonksiyonu
-              /> 
-    }
+      { id: 'settings', label: 'Ayarlar', icon: Settings, view: <SettingsView user={user} onReset={handleResetData} fullData={data} theme={theme} setTheme={setTheme} /> }
   ];
 
+  // --- BURASI DÜZELTİLDİ: Mobil Menü ve Yeni Sidebar Yapısı ---
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 transition-colors">
-      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-700"><h1 className="text-2xl font-bold text-orange-600">BerildenStore</h1><p className="text-xs text-slate-400 font-medium mt-1">Yönetim Paneli V11.4</p></div>
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">{tabs.map(t => (<button key={t.id} type="button" onClick={()=>setActiveTab(t.id)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${activeTab === t.id ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}><t.icon size={20}/> <span className="text-sm font-medium">{t.label}</span></button>))}</nav>
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center"><button type="button" onClick={()=>setTheme(theme==='light'?'dark':'light')} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-white">{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button><button type="button" onClick={() => { setUser(null); localStorage.removeItem('berilden_logged_in'); }} className="text-red-500 font-bold text-sm">Çıkış</button></div>
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 transition-colors overflow-hidden">
+      
+      {/* 1. MOBİL ÜST BAR (Hamburger Menü) */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 z-50">
+        <div className="font-bold text-xl text-orange-600">BerildenStore</div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+          className="p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+        >
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* 2. KARARTMA PERDESİ */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* 3. YAN MENÜ (SIDEBAR) */}
+      <aside 
+        className={`
+          fixed md:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 
+          transform transition-transform duration-300 ease-in-out flex flex-col
+          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
+          md:translate-x-0 
+        `}
+      >
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+            <h1 className="text-2xl font-bold text-orange-600">BerildenStore</h1>
+            <p className="text-xs text-slate-400 font-medium mt-1">Yönetim Paneli V11.5</p>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+            {tabs.map(t => (
+                <button 
+                    key={t.id} 
+                    type="button" 
+                    onClick={() => { setActiveTab(t.id); setIsMobileMenuOpen(false); }} 
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${activeTab === t.id ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                >
+                    <t.icon size={20}/> 
+                    <span className="text-sm font-medium">{t.label}</span>
+                </button>
+            ))}
+        </nav>
+
+        <div className="p-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800">
+            <button type="button" onClick={()=>setTheme(theme==='light'?'dark':'light')} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 dark:text-white hover:bg-slate-200 transition-colors">
+                {theme==='light'?<Moon size={18}/>:<Sun size={18}/>}
+            </button>
+            <button type="button" onClick={() => { setUser(null); localStorage.removeItem('berilden_logged_in'); }} className="text-red-500 font-bold text-sm hover:bg-red-50 px-3 py-2 rounded-lg transition-colors">
+                Çıkış
+            </button>
+        </div>
       </aside>
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        {notification && <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-xl z-50 text-white font-bold flex items-center gap-2 animate-in slide-in-from-top-4 ${notification.type==='error'?'bg-red-600':'bg-green-600'}`}>{notification.type==='success'?<Check size={18}/>:<ShieldAlert size={18}/>} {notification.message}</div>}
-        <div className="md:hidden p-4 bg-white dark:bg-slate-800 shadow-sm flex justify-between z-20"><span className="font-bold text-orange-600 text-lg">BerildenStore</span><button type="button" onClick={()=>setUser(null)}><LogOut className="text-slate-500"/></button></div>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">{tabs.find(t=>t.id===activeTab)?.view}</div>
-        <div className="md:hidden bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-between px-2 py-2 safe-area-bottom z-20">{tabs.slice(0,5).map(t=>(<button key={t.id} type="button" onClick={()=>setActiveTab(t.id)} className={`flex flex-col items-center min-w-[60px] ${activeTab===t.id?'text-orange-600':'text-slate-400'}`}><t.icon size={20}/><span className="text-[9px] mt-1 font-medium">{t.label}</span></button>))}</div>
+
+      {/* 4. ANA İÇERİK ALANI */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative pt-16 md:pt-0">
+        {notification && (
+            <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-xl z-[60] text-white font-bold flex items-center gap-2 animate-in slide-in-from-top-4 ${notification.type==='error'?'bg-red-600':'bg-green-600'}`}>
+                {notification.type==='success'?<Check size={18}/>:<ShieldAlert size={18}/>} {notification.message}
+            </div>
+        )}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+            {tabs.find(t=>t.id===activeTab)?.view}
+        </div>
       </main>
     </div>
   );
 }
 
 // --- GELİŞTİRİLMİŞ AYARLAR MENÜSÜ ---
+// --- AYARLAR MENÜSÜ (DÜZELTİLMİŞ HALİ) ---
 const SettingsView = ({ user, onReset, fullData, theme, setTheme }) => {
     
     // Verileri JSON olarak indirme fonksiyonu
@@ -1857,10 +1890,6 @@ const SettingsView = ({ user, onReset, fullData, theme, setTheme }) => {
                                 <span className="text-sm font-medium dark:text-white">Versiyon</span>
                                 <span className="text-xs font-bold bg-slate-200 dark:bg-slate-700 px-2 py-1 rounded">v11.5.0</span>
                             </div>
-                            <div className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
-                                <span className="text-sm font-medium dark:text-white">Son Güncelleme</span>
-                                <span className="text-xs text-slate-500">Aralık 2024</span>
-                            </div>
                             <button type="button" onClick={()=>window.location.reload()} className="w-full py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors flex items-center justify-center gap-2 text-sm">
                                 <RefreshCw size={16}/> Uygulamayı Yeniden Başlat
                             </button>
@@ -1876,20 +1905,16 @@ const SettingsView = ({ user, onReset, fullData, theme, setTheme }) => {
                             <Archive size={120}/>
                         </div>
                         <h3 className="font-bold text-xl mb-2 relative z-10 flex items-center gap-2"><Archive size={20}/> Veri Yedekleme</h3>
-                        <p className="text-blue-100 text-sm mb-6 relative z-10 opacity-90">Tüm stok, sipariş, müşteri ve muhasebe kayıtlarınızı güvenli bir şekilde bilgisayarınıza indirin.</p>
+                        <p className="text-blue-100 text-sm mb-6 relative z-10 opacity-90">Tüm verilerinizi güvenli bir şekilde indirin.</p>
                         
                         <button onClick={downloadBackup} className="w-full py-3 bg-white text-blue-600 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors relative z-10">
                             <ArrowDownRight size={20}/> Yedek İndir (.json)
                         </button>
-                        <p className="text-[10px] text-center mt-3 text-blue-200 relative z-10">İndirilen dosya .json formatındadır.</p>
                     </div>
 
                     {/* Tehlikeli Bölge */}
                     <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-2xl border border-red-100 dark:border-red-900/30">
                         <h3 className="font-bold text-red-600 mb-4 flex items-center gap-2"><ShieldAlert size={20}/> Tehlikeli Bölge</h3>
-                        <p className="text-sm text-red-800/70 dark:text-red-300 mb-4">
-                            Fabrika ayarlarına dönmek tüm verilerinizi kalıcı olarak siler. Bu işlem geri alınamaz.
-                        </p>
                         <button type="button" onClick={onReset} className="w-full py-3 bg-white dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl font-bold hover:bg-red-600 hover:text-white dark:hover:bg-red-800 transition-colors flex items-center justify-center gap-2">
                             <Trash2 size={18}/> Verileri Sıfırla
                         </button>
