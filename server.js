@@ -10,7 +10,14 @@ app.use(cors());
 app.use(express.json());
 
 // --- TRENDYOL ---
+// --- TRENDYOL SİPARİŞ ÇEKME (GÜNCELLENMİŞ) ---
 app.post('/api/trendyol-orders', async (req, res) => {
+    // 1. DEBUG: Render Environment değişkenlerini okuyabiliyor mu?
+    console.log("--- TRENDYOL KONTROL ---");
+    console.log("Seller ID Durumu:", process.env.TY_SELLER_ID ? "✅ Dolu" : "❌ BOŞ (Environment Ayarlarına Bak)");
+    console.log("API Key Durumu:", process.env.TY_API_KEY ? "✅ Dolu" : "❌ BOŞ");
+    console.log("API Secret Durumu:", process.env.TY_SECRET ? "✅ Dolu" : "❌ BOŞ");
+
     const sellerId = process.env.TY_SELLER_ID;
     const apiKey = process.env.TY_API_KEY;
     const apiSecret = process.env.TY_SECRET;
@@ -20,13 +27,34 @@ app.post('/api/trendyol-orders', async (req, res) => {
 
     try {
         const response = await axios.get(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/orders`, {
-            params: { startDate, endDate: Date.now(), orderBy: "CreatedDate", orderDir: "DESC", size: 50 },
-            auth: { username: apiKey, password: apiSecret }
+            params: { 
+                startDate, 
+                endDate: Date.now(), 
+                orderBy: "CreatedDate", 
+                orderDir: "DESC", 
+                size: 50 
+            },
+            auth: { 
+                username: apiKey, 
+                password: apiSecret 
+            },
+            // 2. USER-AGENT: Kendimizi Chrome Tarayıcısı gibi tanıtıyoruz (403 Hatasını Çözmek İçin)
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
         });
+
         const validOrders = response.data.content.filter(o => o.status !== "Cancelled" && o.status !== "UnSupplied");
         res.json({ success: true, data: validOrders });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        // Hata detayını terminale yazdıralım ki Render Loglarında görelim
+        console.error("Trendyol API Hatası:", error.response?.data || error.message);
+        
+        res.status(500).json({ 
+            success: false, 
+            error: error.response?.status === 403 ? "Erişim Reddedildi (403). API bilgileri yanlış veya IP engelli." : error.message 
+        });
     }
 });
 
