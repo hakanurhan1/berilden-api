@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, increment, setDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { Menu, X } from 'lucide-react'; // Menu (3 çizgi) ve X (Kapat) ikonları
+import * as XLSX from 'xlsx';
 import { 
   Package, ShoppingCart, Lightbulb, ClipboardList, Plus, Trash2, Store, LogOut, Settings, Trello, 
   Coins, Printer, Box, Activity, LayoutDashboard, TrendingUp, AlertTriangle, 
@@ -1630,78 +1631,102 @@ const CiceksepetiView = ({ ops }) => {
 };
 
 // --- SOFTTR ENTEGRASYON ---
+// --- SOFTTR (MANUEL EXCEL YÜKLEME) MODÜLÜ ---
 const SofttrView = ({ ops }) => {
-    const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    const fetchSofttr = async () => {
-        setLoading(true);
-        try {
-            // Render sunucumuzdaki adrese istek atıyoruz
-            const res = await fetch('https://berilden-api.onrender.com/api/softtr-orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const result = await res.json();
-            
-            if(result.success) {
-                // Fiyatı 0'dan büyük olanları alalım
-                const validOrders = result.data.filter(o => o.price > 0 || o.price > "0"); 
-                setOrders(validOrders);
-                if(validOrders.length === 0) alert("Sipariş listesi boş geldi. (Sütun isimleri uyuşmuyor olabilir)");
-            } else {
-                alert("Hata: " + (result.error || "Bilinmeyen hata"));
-            }
-        } catch (error) {
-            alert("Sunucu hatası! Lütfen 1 dakika bekleyip tekrar deneyin.");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // 1. Dosya Seçildiğinde Çalışan Fonksiyon
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    const importOrder = async (order) => {
-        await ops.add('orders', {
-            customerName: order.customerName,
-            productName: order.productName,
-            price: parseFloat(order.price),
-            platform: 'Berildenn.com',
-            status: 'new',
-            note: `Web Siparişi No: ${order.orderNumber}`,
-            createdAt: serverTimestamp()
-        });
-        setOrders(orders.filter(o => o.orderNumber !== order.orderNumber));
+        setLoading(true);
+        const reader = new FileReader();
+
+        reader.onload = (evt) => {
+            try {
+                // Dosyayı oku
+                const bstr = evt.target.result;
+                const wb = XLSX.read(bstr, { type: 'binary' });
+                const wsname = wb.SheetNames[0];
+                const ws = wb.Sheets[wsname];
+                const data = XLSX.utils.sheet_to_json(ws);
+
+                console.log("Excel Verisi:", data); // Konsoldan sütun adlarını görebiliriz
+
+                // Veriyi Formatla ve Kaydet
+                let addedCount = 0;
+                data.forEach(row => {
+                    // Excel sütun başlıklarını buraya göre eşleştiriyoruz
+                    // SoftTR genelde bu başlıkları kullanır, tutmazsa konsola bakıp düzeltiriz
+                    const price = row['Genel Toplam'] || row['Tutar'] || row['Toplam Tutar'] || 0;
+                    const orderId = row['Sipariş No'] || row['Siparis No'] || row['ID'];
+
+                    if (price > 0 && orderId) {
+                        ops.add('orders', {
+                            customerName: row['Ad Soyad'] || row['Müşteri'] || row['Alıcı'] || 'Web Müşterisi',
+                            productName: 'Web Sitesi Siparişi', // Detaylı ürün adı Excel'de olmayabilir
+                            price: parseFloat(price.toString().replace(',','.')), // Virgülü noktaya çevir
+                            platform: 'Berildenn.com',
+                            status: 'new',
+                            note: `Web Siparişi No: ${orderId}`,
+                            createdAt: serverTimestamp()
+                        });
+                        addedCount++;
+                    }
+                });
+
+                alert(`Başarılı! ${addedCount} adet sipariş sisteme aktarıldı.`);
+
+            } catch (error) {
+                console.error("Excel Okuma Hatası:", error);
+                alert("Excel dosyası okunamadı. Lütfen doğru dosyayı seçtiğinizden emin olun.");
+            } finally {
+                setLoading(false);
+                e.target.value = null; // Input'u temizle
+            }
+        };
+
+        reader.readAsBinaryString(file);
     };
 
     return (
         <div className="space-y-6 animate-in fade-in pb-20">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-purple-200 dark:border-slate-700 shadow-sm">
-                <h2 className="text-xl font-bold dark:text-white mb-4 text-purple-600">Berildenn.com Entegrasyonu</h2>
-                <div className="bg-purple-50 text-purple-800 p-3 rounded-lg mb-4 text-xs">
-                    ✅ Excel Bağlantısı Aktif
-                </div>
-                <button onClick={fetchSofttr} disabled={loading} className="w-full py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors shadow-lg shadow-purple-100 dark:shadow-none flex justify-center items-center gap-2">
-                    {loading ? 'Bağlanıyor...' : 'SİTEDEN SİPARİŞLERİ ÇEK'}
-                </button>
-            </div>
+            <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl border border-purple-200 dark:border-slate-700 shadow-sm text-center">
+                <h2 className="text-2xl font-bold dark:text-white mb-2 text-purple-600">Berildenn.com Entegrasyonu</h2>
+                <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                    Sunucu engellemeleri nedeniyle siparişleri iki adımda aktarıyoruz.
+                </p>
 
-            {orders.length > 0 && (
-                <div className="grid grid-cols-1 gap-3">
-                    {orders.map((o, idx) => (
-                        <div key={idx} className="bg-white dark:bg-slate-800 p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center gap-4 hover:shadow-md transition-shadow">
-                            <div className="flex-1">
-                                <h4 className="font-bold dark:text-white">{o.customerName}</h4>
-                                <p className="text-sm text-slate-500">#{o.orderNumber} • {o.productName}</p>
-                            </div>
-                            <div className="text-right flex items-center gap-4">
-                                <p className="font-bold text-purple-600 text-lg">{o.price}₺</p>
-                                <button onClick={()=>importOrder(o)} className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-green-700">
-                                    Sisteme Al
-                                </button>
-                            </div>
-                        </div>
-                    ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                    {/* ADIM 1 */}
+                    <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800/30">
+                        <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold mb-3 mx-auto">1</div>
+                        <h3 className="font-bold mb-2 dark:text-white">Excel'i İndir</h3>
+                        <p className="text-xs text-slate-500 mb-4">Sitedeki güncel sipariş dosyasını bilgisayarına indir.</p>
+                        <a 
+                            href="https://www.berildenn.com/panel/views/raporlama/siparisexcel.php?query=VFg0eHFyV2pWYkpTVENBR0RhL0lQMHhSQy82L0w1dkh0bWJrS3RyeGRGV01ZajFaT3RBYlZEaTdLaWxXdUVraUMwR25Rc1BGUGppaHc2MkpRajhVdjQrbXUyWWFxNCtDdzZuTG5qOE1UZDg3dnN5TjNLQngrZlRKVStVeW9UREc1ZWNhbmhqdFh4NGVINHVNN24zRkpnQkUwamxTbXJuOGhIcW1JdnRZaVB5OGlPVEZWWmlyKzkvekxxeW1oaGdOTkpWZjFVQkVGVW9vTFVuL01LT1gveHg5cmRrZnJyQUt2ZU96SUs0bytJTHZQVS8vU3dxdDNZWGpLQVVzS1BDS0xldTIxY2Z4UjBCRGMxb2I4Y0h0aXM5V2xHUVowMVFtQTliR1ZnYkl4SFEyYjBLRDFjNGoveXM2WDR4MVc4KzB0ODBDU1c5b3BEYmtKUkUwRVIrUzgyeFZDZERwaGpVUkk3V2hKVTRxc3RQcUxIdkxJUFVrL05WZWd0R3loMHAyQUZwandGZk0xMDh3ek1hUDhrTEp4OUJBeW1ETEZySE5CcExFZWNMaU1Ob0grUU5IOXFLVWgvVEo5VFlqYllyME5XbTVYclJSdEJMUk1uOGhUTlo4U01jK21LVUhKd2hpbFlHYjZKN0xJcjVzVjNoMGVGSCtURDNiRnFBNjVWY0RHNU4yeDNpcm9VU0poNTRxcWFmMXczakRBV0NXU1ZMU2FiM0QzU2dmaG5DODZvc252ZEo2M20zMGJZYjdHcURMb0pHUmhTbExaUmJjUXF4WDRRaGxDNDBDZUhVZEpCUVdwWmdYNnFkNTBXN0dHaEg0Znc1RDdxSG1HTDVDdjJYemxGdEE4R3hsUTJtWW9pRnVsTkU1VjRTckhMVlFoQnN2MHVIdndyNndZQXJ2VGkrTTJFdDZWTkhtYkt1dkdOY2JTUndtUG51R2FDNFRPYUI1OWJNa0Y5T3VRdlRGNHA0WmMrSzlrZnVqTDRSSXNvNXBMQzNVdjcxWTFaVWF6cnQvL3VxYU5IcmhVZ2EzWkYxbkZJUW9SdjBiUWNpRDl4OHBob21Zd285VklZbW5yano2T1ZCWW91L3B2czNYNmNpUGl4dFJxeFYvWWdneGRjYmlVa09hOUppb3FVUWtwRFNYVkI4WURyK05xUnFRUHdEV0dReU50WXY0NHBMdjRLRkZWYVhySS9rVWxyZ3FDWTlNdmdvcFg3VnltZ2pNbU1tRmJITmNMYzhnZFk0Y3QyaXo5RmNNcUg2eGpCUDRudW5tZXFiWEViZmZkR0d4OXVZdFI2aitNTGdFb2Y2RlpSNVpDek5vMERGT2V5WT0=" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-purple-700 block transition-colors"
+                        >
+                            Dosyayı İndir
+                        </a>
+                    </div>
+
+                    {/* ADIM 2 */}
+                    <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-100 dark:border-green-800/30 relative">
+                        <div className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center font-bold mb-3 mx-auto">2</div>
+                        <h3 className="font-bold mb-2 dark:text-white">Sisteme Yükle</h3>
+                        <p className="text-xs text-slate-500 mb-4">İndirdiğin dosyayı buraya seç.</p>
+                        
+                        <label className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 block cursor-pointer transition-colors">
+                            {loading ? 'İşleniyor...' : 'Dosyayı Seç ve Aktar'}
+                            <input type="file" accept=".xls,.xlsx" className="hidden" onChange={handleFileUpload} disabled={loading} />
+                        </label>
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

@@ -115,4 +115,61 @@ app.post('/api/softtr-orders', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+// --- TRENDYOL ÜRÜN LİSTESİ ÇEKME ---
+app.post('/api/trendyol-products', async (req, res) => {
+    const sellerId = process.env.TY_SELLER_ID;
+    const apiKey = process.env.TY_API_KEY;
+    const apiSecret = process.env.TY_SECRET;
+    const encodedAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+
+    try {
+        // İlk 500 ürünü çekelim (Sayfalama yapmadan toplu görelim)
+        const response = await axios.get(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/products?size=100`, {
+            headers: { 'Authorization': `Basic ${encodedAuth}` }
+        });
+
+        res.json({ success: true, data: response.data.content });
+    } catch (error) {
+        console.error("Trendyol Ürün Hatası:", error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// --- TRENDYOL FİYAT VE STOK GÜNCELLEME (SATIŞA KAPATMA DAHİL) ---
+app.post('/api/trendyol-update', async (req, res) => {
+    const sellerId = process.env.TY_SELLER_ID;
+    const apiKey = process.env.TY_API_KEY;
+    const apiSecret = process.env.TY_SECRET;
+    const encodedAuth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    
+    // Frontend'den gelen veriler: Barkod, Fiyat, Stok
+    const { barcode, price, stock } = req.body;
+
+    const payload = {
+        items: [
+            {
+                barcode: barcode,
+                quantity: parseInt(stock),
+                salePrice: parseFloat(price),
+                listPrice: parseFloat(price) // Liste fiyatını da satış fiyatıyla eşitliyoruz
+            }
+        ]
+    };
+
+    try {
+        await axios.post(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/products/price-and-inventory`, payload, {
+            headers: { 
+                'Authorization': `Basic ${encodedAuth}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        res.json({ success: true, message: "Güncellendi" });
+    } catch (error) {
+        console.error("Güncelleme Hatası:", error.response?.data || error.message);
+        res.status(500).json({ success: false, error: "Güncelleme başarısız" });
+    }
+});
+
 app.listen(PORT, () => console.log(`🚀 Sunucu Çalışıyor`));
