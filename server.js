@@ -9,14 +9,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- TRENDYOL ---
-// --- TRENDYOL SİPARİŞ ÇEKME (GÜNCELLENMİŞ) ---
+// --- TRENDYOL SİPARİŞLERİ ÇEKME (GÜNCELLENMİŞ & GÜVENLİ) ---
 app.post('/api/trendyol-orders', async (req, res) => {
-    // 1. DEBUG: Render Environment değişkenlerini okuyabiliyor mu?
-    console.log("--- TRENDYOL KONTROL ---");
-    console.log("Seller ID Durumu:", process.env.TY_SELLER_ID ? "✅ Dolu" : "❌ BOŞ (Environment Ayarlarına Bak)");
-    console.log("API Key Durumu:", process.env.TY_API_KEY ? "✅ Dolu" : "❌ BOŞ");
-    console.log("API Secret Durumu:", process.env.TY_SECRET ? "✅ Dolu" : "❌ BOŞ");
+    console.log("--- TRENDYOL SİPARİŞ İSTEĞİ BAŞLADI ---");
+    
+    // 1. DEBUG: Şifreler Yüklü mü Kontrolü
+    const envCheck = {
+        SellerID: process.env.TY_SELLER_ID ? "✅ VAR" : "❌ YOK (Render Environment Ayarlarına Bak)",
+        ApiKey: process.env.TY_API_KEY ? "✅ VAR" : "❌ YOK",
+        ApiSecret: process.env.TY_SECRET ? "✅ VAR" : "❌ YOK"
+    };
+    console.log("Şifre Kontrolü:", envCheck);
 
     const sellerId = process.env.TY_SELLER_ID;
     const apiKey = process.env.TY_API_KEY;
@@ -26,6 +29,8 @@ app.post('/api/trendyol-orders', async (req, res) => {
     const startDate = Date.now() - (14 * 24 * 60 * 60 * 1000); 
 
     try {
+        console.log("Trendyol API'ye istek gönderiliyor...");
+        
         const response = await axios.get(`https://api.trendyol.com/sapigw/suppliers/${sellerId}/orders`, {
             params: { 
                 startDate, 
@@ -38,22 +43,25 @@ app.post('/api/trendyol-orders', async (req, res) => {
                 username: apiKey, 
                 password: apiSecret 
             },
-            // 2. USER-AGENT: Kendimizi Chrome Tarayıcısı gibi tanıtıyoruz (403 Hatasını Çözmek İçin)
+            // 2. USER-AGENT: Kendimizi Chrome Tarayıcısı gibi tanıtıyoruz
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
 
+        console.log("✅ Trendyol Yanıtı Başarılı. Sipariş Sayısı:", response.data.content.length);
+
         const validOrders = response.data.content.filter(o => o.status !== "Cancelled" && o.status !== "UnSupplied");
         res.json({ success: true, data: validOrders });
 
     } catch (error) {
-        // Hata detayını terminale yazdıralım ki Render Loglarında görelim
-        console.error("Trendyol API Hatası:", error.response?.data || error.message);
+        console.error("🚨 Trendyol API Hatası:", error.response?.data || error.message);
         
         res.status(500).json({ 
             success: false, 
-            error: error.response?.status === 403 ? "Erişim Reddedildi (403). API bilgileri yanlış veya IP engelli." : error.message 
+            error: error.response?.status === 403 
+                ? "Erişim Reddedildi (403). Render'da API Key ayarları eksik veya IP engelli." 
+                : error.message 
         });
     }
 });
